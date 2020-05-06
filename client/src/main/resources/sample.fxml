@@ -1,0 +1,24 @@
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.PasswordField?>
+<?import javafx.scene.control.ListView?>
+<VBox fx:controller="com.rr27.client.Controller"
+      xmlns:fx="http://javafx.com/xml" alignment="CENTER">
+    <HBox fx:id="authPanel">
+        <TextField fx:id="loginField" promptText="Логи" HBox.hgrow="ALWAYS" />
+        <PasswordField fx:id="passField" promptText="Пароль" HBox.hgrow="ALWAYS" onAction="#sendAuth"/>
+        <Button text="Войти" HBox.hgrow="ALWAYS" onAction="#sendAuth"/>
+    </HBox>
+    <HBox VBox.vgrow="ALWAYS">
+        <TextArea fx:id="textArea" maxWidth="-Infinity" editable="false" />
+        <ListView fx:id="clientsList" minWidth="200" maxWidth="200" />
+    </HBox>
+    <HBox fx:id="msgPanel">
+        <TextField fx:id="msgField" promptText="Введите свое сообщение..." HBox.hgrow="ALWAYS" onAction="#sendMsg" />
+        <Button text="Send" onAction="#sendMsg" />
+    </HBox>
+
+</VBox>

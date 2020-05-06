@@ -1,0 +1,39 @@
+package com.rr27.server;
+
+import java.util.ArrayList;
+import java.util.List;
+
+//До БД использовался этот класс
+public class SimpleAuthService implements AuthService {
+
+    private class UserData{
+        private String login;
+        private String pass;
+        private String nickname;
+
+        public UserData(String login, String pass, String nickname) {
+            this.login = login;
+            this.pass = pass;
+            this.nickname = nickname;
+        }
+    }
+
+    private List<UserData> users;
+
+    public SimpleAuthService() {
+        this.users = new ArrayList<>();
+        users.add(new UserData("log1", "pass1", "nick"));
+        users.add(new UserData("log2", "pass2", "sam"));
+        users.add(new UserData("log3", "pass3", "john"));
+    }
+
+    @Override
+    public String getNicknameByLoginAndPassword(String login, String pass) {
+        for (UserData u: users) {
+            if (u.login.equals(login) && u.pass.equals(pass)){
+                return u.nickname;
+            }
+        }
+        return null;
+    }
+}

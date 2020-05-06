@@ -1,0 +1,170 @@
+package com.rr27.client;
+
+import javafx.application.Platform;
+import javafx.event.ActionEvent;
+import javafx.event.EventHandler;
+import javafx.fxml.FXML;
+import javafx.fxml.Initializable;
+import javafx.scene.control.*;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.HBox;
+
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.Socket;
+import java.net.URL;
+import java.util.ResourceBundle;
+
+public class Controller implements Initializable {
+
+    @FXML
+    TextArea textArea;
+    @FXML
+    TextField msgField;
+    @FXML
+    HBox msgPanel, authPanel;
+    @FXML
+    TextField loginField;
+    @FXML
+    PasswordField passField;
+    @FXML
+    ListView<String> clientsList;
+
+    private Socket socket;
+    private DataInputStream in;
+    private DataOutputStream out;
+
+    private boolean authenticated;
+    private String nickname;
+
+    @Override
+    public void initialize(URL location, ResourceBundle resources) {
+        setAuthenticated(false);
+        //добавление возможности по двойному клику по никнейму с писке отправлять личное сообщение
+        clientsList.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2){
+                String nick = clientsList.getSelectionModel().getSelectedItem();        //вытаскиваем String (ник) из поля
+                msgField.appendText("/w " + nick + " ");
+                msgField.requestFocus();
+                msgField.selectEnd();                                                   //ставим курсор в конец сообщения
+            }
+        });
+    }
+
+    public void setAuthenticated(boolean authenticated) {
+        this.authenticated = authenticated;
+        authPanel.setVisible(!authenticated);
+        authPanel.setManaged(!authenticated);                             //managed - оставлять или нет под наши поля место, если они НЕВИДНЫ
+        msgPanel.setVisible(authenticated);
+        msgPanel.setManaged(authenticated);
+        clientsList.setVisible(authenticated);
+        clientsList.setManaged(authenticated);
+        if (!authenticated){
+            nickname = "";
+        }
+    }
+
+    public void connect(){
+        try{
+//            setAuthenticated(false);
+            socket = new Socket("localhost", 8189);
+            in = new DataInputStream(socket.getInputStream());
+            out = new DataOutputStream(socket.getOutputStream());
+            Thread t = new Thread(() -> {                                   //отдельный поток, который будет не блокировать основной и ждать сообщений от сервера
+                try {                                                       //без отдельного потока мы зависли бы на этой прослушке неувидев интерфейс
+                    while(true){                                            //цикл авторизации, пока не будет правильной пары дальше не пройдем
+                        String msg = in.readUTF();
+                        if (msg.contains("/authok")){
+                            nickname = msg.split("\\s")[1];         //можно его потом в шапку куда-нибудь запихнуть (свой никнейм)
+                            setAuthenticated(true);
+                            break;
+                        }
+                    }
+                    while(true) {
+                        String msg = in.readUTF();
+                        if (msg.startsWith("/")){
+                            if (msg.startsWith("/clients ")){
+                                String[] tokens = msg.split("\\s");
+                                //JavaFX (gui) работает в своем потоке и никакие другие потоки не должны лезть в отрисовку интерфейса
+                                //поэтому ту логику обновления списка мы через Platform прокидываем обратно в поток JFX
+                                Platform.runLater(() -> {
+                                    clientsList.getItems().clear();
+                                    for (int i = 1; i < tokens.length; i++) {
+                                        clientsList.getItems().add(tokens[i]);
+                                    }
+                                });
+                            }
+                            if (msg.equals("/end")){                          //теперь никаких исключений в консоли, когда отключаемся
+                                break;
+                            }
+                            continue;
+                        }
+                        textArea.appendText(msg + "\n");
+                    }
+                } catch (IOException e) {
+                    //когда придет именно обрыв связи - сервер пуал, убдет аккуратное окно с предупреждением
+                    showAlert("Соединиение с сервером разорвано");
+                } finally {                                   //именно в потоке, который отвечает за прослушку новых сообщений
+                    closeConnection();                        //мы добавляем закрытие потоков вводы и вывода, если соединение упало
+                }
+            });
+            t.setDaemon(true);                                   //JavaFX работает в своем потоке, если окошко закроем, то без ДемонРежима поток на прослушку так и будет висеть
+            t.start();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        //Здесь finally не пишем! Иначе, мы открыли сокет, потоки данных и тут же все закроем (закрытие идет выше)
+    }
+
+
+    public void sendMsg(ActionEvent event) {
+        try {
+            out.writeUTF(msgField.getText());
+            msgField.clear();
+            msgField.requestFocus();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void sendAuth(ActionEvent event) {
+        try {
+            if (socket == null || socket.isClosed()){
+                connect();
+            }
+            out.writeUTF("/auth " + loginField.getText() + " " + passField.getText());
+            loginField.clear();
+            passField.clear();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void showAlert(String msg){
+        Platform.runLater(() -> {                                           //опять прокидываем в JavaFX поток, чтобы он смог его принять и вывести, а не консоль
+            Alert alert = new Alert(Alert.AlertType.WARNING, msg);
+            alert.showAndWait();                                            //блокирует приложуху, пока не ответим на окно
+//            alert.show();                                                 //без блокировки основного потока
+        });
+    }
+
+    public void closeConnection(){
+        setAuthenticated(false);
+        try {
+            in.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        try {
+            out.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        try {
+            socket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
